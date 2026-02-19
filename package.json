@@ -4,16 +4,7 @@
   "main": "src/main.js",
   "type": "module",
   "scripts": {
-    "start": "electron .",
-    "dist": "electron-builder --linux snap"
-  },
-  "build": {
-    "appId": "com.example.notiondesktopclient",
-    "linux": {
-      "target": "snap",
-      "icon": "assets/icon.png",
-      "category": "Utility"
-    }
+    "start": "electron ."
   },
   "repository": "https://github.com/xanmoy/notion-desktop.git",
   "keywords": [
@@ -27,8 +18,7 @@
   "license": "ISC",
   "description": "A simple and efficient desktop client for Notion.",
   "devDependencies": {
-    "electron": "^33.2.0",
-    "electron-builder": "^25.1.8"
+    "electron": "^33.2.0"
   },
   "dependencies": {
     "electron-context-menu": "^4.0.4"

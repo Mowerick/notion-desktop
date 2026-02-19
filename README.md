@@ -19,11 +19,15 @@ Notion Desktop is a cross-platform desktop application that allows you to use No
 
 ## 📦 **Installation**
 
-```bash
-sudo snap install notion-desktop
-```
+### Building with Nix (Recommended)
 
-### Build From Source
+This project includes a `default.nix` file for reproducible builds using the Nix package manager.
+
+#### Prerequisites
+
+- [Nix package manager](https://nixos.org/download.html) installed on your system
+
+#### Development Build
 
 1. **Clone the repository**:
 
@@ -32,53 +36,85 @@ git clone https://github.com/xanmoy/notion-desktop.git
 cd notion-desktop
 ```
 
-2. **Install dependencies**: Ensure that you have all the necessary dependencies installed.
+2. **Build with Nix**:
 
 ```bash
-   npm instal
+nix-build
 ```
 
-3. Start the application:
+This will:
+- Fetch all dependencies automatically
+- Build the application in an isolated environment
+- Create a `result` symlink pointing to the built application
+
+3. **Run the application**:
+
+```bash
+./result/bin/notion-desktop
+```
+
+#### Development with Nix Shell
+
+For active development, you can use `nix-shell` to enter a development environment:
+
+```bash
+nix-shell -p nodejs electron python3 pkg-config
+```
+
+Then run the application in development mode:
+
+```bash
+npm install
+npm start
+```
+
+### Alternative: Build from Source (Without Nix)
+
+If you prefer not to use Nix, you can build manually:
+
+1. **Clone the repository**:
+
+### Alternative: Build from Source (Without Nix)
+
+If you prefer not to use Nix, you can build manually:
+
+1. **Clone the repository**:
+
+```bash
+git clone https://github.com/xanmoy/notion-desktop.git
+cd notion-desktop
+```
+
+2. **Install dependencies**:
+
+```bash
+npm install
+```
+
+3. **Start the application in development mode**:
 
 ```bash
 npm start
 ```
 
-4. **Build the application**: Run the following command to create a Snap package of the application.
+## ↩️ **Uninstallation**
+
+If built with Nix, simply remove the `result` symlink and garbage collect:
 
 ```bash
-npm run dist
-```
-
-5. **Change to the dist directory**: Navigate to the dist directory where the Snap package is located.
-
+rm result
+nix-collect-garbage
+```ia Snap:**
 ```bash
-cd dist
+notion-desktop
 ```
 
-6. **Install the Snap package**: Use the following command to install the Snap package. The `--dangerous` flag allows the installation of locally built packages.
-
+**Via Nix build:**
 ```bash
-sudo snap install --dangerous ./Notion-desktop_1.0.3_amd64.snap 
+./result/bin/notion-desktop
 ```
 
-## ↩️ **Uninstallation Steps**
-
-Remove the Snap package: To uninstall the Notion Desktop application, run the following command:
-
-```bash
-sudo snap remove Notion-desktop
-```
-
-## 📖 **Usage Instructions**
-
-### **Launching the App**:
-
-   After installation, open Notion Desktop using:
-
-```bash
-   notion-desktop
-```
+**Via desktop launcher:** Search for "Notion Desktop" in your application menu
 
 ## 🤝 **Contributing**
 
@@ -86,9 +122,18 @@ Contributions are welcome! If you'd like to contribute to this project, please f
 
 ## 📜 **License**
 
-This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
+## 📖 **Usage**
 
-## Acknowledgments
+After building, launch the application:
 
-- **Electron** - Framework used to build the application.
-- **Notion** - A new tool that blends your everyday work apps into one. It's the all-in-one workspace for you and your team.
+**Via Nix build:**
+```bash
+./result/bin/notion-desktop
+```
+
+**Via development mode:**
+```bash
+npm start
+```
+
+**Via desktop launcher:** Search for "Notion Desktop" in your application menu (if installed system-wide)

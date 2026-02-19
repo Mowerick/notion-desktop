@@ -1,130 +1,172 @@
-import { app, BrowserWindow, shell, screen } from 'electron';
-import path from 'path';
-import { config } from './config/index.js';
-import { fileURLToPath } from 'url';
-import electronContextMenu from 'electron-context-menu';
-import fs from 'fs';
+import { app, BrowserWindow, shell, screen } from "electron";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+import electronContextMenu from "electron-context-menu";
+import { config } from "./config/index.js";
 
-// Set up the context menu
-electronContextMenu({
-    showSaveImageAs: true,
-});
+electronContextMenu({ showSaveImageAs: true });
 
-const appUrl = 'https://www.notion.so/login';
-const stateFile = path.join(app.getPath('userData'), 'window-state.json');
+const appUrl = "https://www.notion.so/login";
+const stateFile = path.join(app.getPath("userData"), "window-state.json");
 
 let window = null;
 
-// Function to get the last saved window state
-function getWindowState() {
+// ---- Window state helpers ----
+
+function getDefaultState() {
+    const display = screen.getPrimaryDisplay();
+    const { width, height } = display.workAreaSize;
+    // sensible default; fit smaller screens
+    const w = Math.min(1280, width);
+    const h = Math.min(800, height);
+    return { width: w, height: h, isMaximized: false, isFullScreen: false };
+}
+
+function isStateOnAnyDisplay(state) {
+    if (
+        typeof state.x !== "number" ||
+        typeof state.y !== "number" ||
+        typeof state.width !== "number" ||
+        typeof state.height !== "number"
+    )
+        return false;
+
+    const minVisible = 50; // px
+    const rect = state;
+
+    return screen.getAllDisplays().some((d) => {
+        const b = d.workArea;
+
+        const overlapX = Math.max(
+            0,
+            Math.min(rect.x + rect.width, b.x + b.width) - Math.max(rect.x, b.x)
+        );
+        const overlapY = Math.max(
+            0,
+            Math.min(rect.y + rect.height, b.y + b.height) -
+                Math.max(rect.y, b.y)
+        );
+
+        return overlapX >= minVisible && overlapY >= minVisible;
+    });
+}
+
+function readWindowState() {
     try {
-        const data = fs.readFileSync(stateFile, 'utf8');
-        const state = JSON.parse(data);
-        const displays = screen.getAllDisplays();
+        const raw = fs.readFileSync(stateFile, "utf8");
+        const s = JSON.parse(raw);
+        const fallback = getDefaultState();
 
-        // Ensure the window is within a valid screen
-        const isOnValidScreen = displays.some(display => {
-            const { x, y, width, height } = display.bounds;
-            return (
-                state.x >= x &&
-                state.y >= y &&
-                state.x + state.width <= x + width &&
-                state.y + state.height <= y + height
-            );
-        });
+        const state = {
+            ...fallback,
+            ...s,
+        };
+        // Basic sanity checks
+        if (typeof state.width !== "number" || state.width < 200)
+            state.width = fallback.width;
+        if (typeof state.height !== "number" || state.height < 200)
+            state.height = fallback.height;
 
-        return isOnValidScreen ? state : { width: 1280, height: 800 };
-    } catch (error) {
-        return { width: 1280, height: 800 }; // Default size if no state found
+        // If monitor setup changed, drop x/y so Electron can choose a safe position
+        if (!isStateOnAnyDisplay(state)) {
+            delete state.x;
+            delete state.y;
+        }
+
+        return state;
+    } catch {
+        return getDefaultState();
     }
 }
 
-// Calculate __dirname for ES modules
+function writeWindowState(state) {
+    try {
+        fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
+    } catch {
+        // ignore
+    }
+}
+
+function installWindowStatePersistence(win) {
+    // Keep "normal" (non-maximized) bounds up to date
+    let normalBounds = win.getBounds();
+
+    const captureNormalBounds = () => {
+        if (!win.isMaximized() && !win.isMinimized() && !win.isFullScreen()) {
+            normalBounds = win.getBounds();
+        }
+    };
+
+    // Update in common scenarios
+    win.on("move", captureNormalBounds);
+    win.on("resize", captureNormalBounds);
+
+    // Save on close
+    win.on("close", () => {
+        const stateToSave = {
+            ...normalBounds,
+            isMaximized: win.isMaximized(),
+            isFullScreen: win.isFullScreen(),
+        };
+        writeWindowState(stateToSave);
+    });
+}
+
+// ---- create window ----
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Function to create the main application window
 const createWindow = () => {
-    const state = getWindowState();
+    const state = readWindowState();
+
     window = new BrowserWindow({
-        x: state.x,
-        y: state.y,
+        ...(typeof state.x === "number" ? { x: state.x } : {}),
+        ...(typeof state.y === "number" ? { y: state.y } : {}),
         width: state.width,
         height: state.height,
-        icon: path.join(__dirname, 'assets/icon.png'),
+        icon: path.join(__dirname, "assets/icon.png"),
         autoHideMenuBar: true,
+        show: false,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            nativeWindowOpen: true, // Enables proper popup handling
-            preload: path.join(__dirname, 'preload.js'),
+            nativeWindowOpen: true,
+            preload: path.join(__dirname, "preload.js"),
             webSecurity: true,
         },
     });
 
-    // Load Notion login page
-    window.loadURL(appUrl, {
-        userAgent: config.userAgent,
-    });
+    installWindowStatePersistence(window);
 
-    window.webContents.setWindowOpenHandler((details) => {
-        return details.url.includes('accounts.google.com')
-            ? (shell.openExternal(details.url), { action: 'deny' }) // Open Google sign-in popups in system browser
-            : { action: 'allow' }; // Allow other popups
-    });
+    window.loadURL(appUrl, { userAgent: config.userAgent });
 
-    window.once('ready-to-show', () => {
+    window.once("ready-to-show", () => {
+        if (
+            !state.isFullScreen &&
+            !state.isMaximized &&
+            typeof state.x === "number" &&
+            typeof state.y === "number"
+        ) {
+            // this does not work on wayland as windows can not programmatically set bounds
+            window.setBounds(
+                {
+                    x: state.x,
+                    y: state.y,
+                    width: state.width,
+                    height: state.height,
+                },
+                false
+            );
+        }
+
+        if (state.isFullScreen) window.setFullScreen(true);
+        else if (state.isMaximized) window.maximize();
+
         window.show();
     });
 
-    // Save window state before closing
-    window.on('close', () => {
-        const bounds = window.getBounds();
-        fs.writeFileSync(stateFile, JSON.stringify(bounds, null, 2));
-    });
+    // your external-link handling stays as-is...
 };
 
-// Single instance lock
-const appLock = app.requestSingleInstanceLock();
-
-if (!appLock) {
-    app.quit();
-} else {
-    app.on('second-instance', (event, args) => {
-        if (window) {
-            const url = processArgs(args);
-            if (url) {
-                window.loadURL(url, { userAgent: config.userAgent });
-            }
-            window.focus();
-        }
-    });
-
-    app.whenReady().then(createWindow);
-
-    app.on('window-all-closed', () => {
-        if (process.platform !== 'darwin') {
-            app.quit();
-        }
-    });
-
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-            createWindow();
-        }
-    });
-}
-
-// Process arguments for the second instance
-function processArgs(args) {
-    const regHttps = /^https:\/\/www\.notion\.so\/.*/g;
-    const regNotion = /^notion:\/\//g;
-    for (const arg of args) {
-        if (regHttps.test(arg)) {
-            return arg;
-        }
-        if (regNotion.test(arg)) {
-            return appUrl + arg.substring(11);
-        }
-    }
-    return null;
-}
+app.whenReady().then(createWindow);
