@@ -5,7 +5,7 @@ Notion Desktop is a cross-platform desktop application that allows you to use No
 ![Image](https://github.com/Mowerick/notion-desktop/blob/main/screenshots/notion-desktop.jpeg)
 
 #### Information
-I am using this forked repository to use this as an overlay for the notion-desktop package in nixpkgs as there was no package that fulfilled my needs or were not buggy or poorly maintained. There are some minor tweaks to it so check out the release history to know whats changed.
+I'm using this forked repository as an overlay for the notion-desktop package in nixpkgs, because the available packages either didn't meet my requirements or were buggy and poorly maintained. I've made a few minor tweaks—check the release history for a detailed list of changes.
 
 ## 📦 **Installation**
 
