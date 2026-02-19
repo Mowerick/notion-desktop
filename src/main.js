@@ -5,6 +5,29 @@ import { fileURLToPath } from "url";
 import electronContextMenu from "electron-context-menu";
 import { config } from "./config/index.js";
 
+const NOTION_INTERNAL_HOST_SUFFIXES = [
+    "notion.so",
+    "notion.com",
+    "notion.site",
+    "notion-static.com",
+    "notionusercontent.com",
+];
+
+function isProbablyNotionInternal(targetUrl) {
+    try {
+        const u = new URL(targetUrl);
+
+        if (u.protocol !== "http:" && u.protocol !== "https:") return true;
+
+        const host = u.hostname.toLowerCase();
+        return NOTION_INTERNAL_HOST_SUFFIXES.some(
+            (suffix) => host === suffix || host.endsWith(`.${suffix}`)
+        );
+    } catch {
+        return true;
+    }
+}
+
 electronContextMenu({ showSaveImageAs: true });
 
 const appUrl = "https://www.notion.so/login";
@@ -12,12 +35,9 @@ const stateFile = path.join(app.getPath("userData"), "window-state.json");
 
 let window = null;
 
-// ---- Window state helpers ----
-
 function getDefaultState() {
     const display = screen.getPrimaryDisplay();
     const { width, height } = display.workAreaSize;
-    // sensible default; fit smaller screens
     const w = Math.min(1280, width);
     const h = Math.min(800, height);
     return { width: w, height: h, isMaximized: false, isFullScreen: false };
@@ -62,13 +82,11 @@ function readWindowState() {
             ...fallback,
             ...s,
         };
-        // Basic sanity checks
         if (typeof state.width !== "number" || state.width < 200)
             state.width = fallback.width;
         if (typeof state.height !== "number" || state.height < 200)
             state.height = fallback.height;
 
-        // If monitor setup changed, drop x/y so Electron can choose a safe position
         if (!isStateOnAnyDisplay(state)) {
             delete state.x;
             delete state.y;
@@ -112,8 +130,6 @@ function installWindowStatePersistence(win) {
         writeWindowState(stateToSave);
     });
 }
-
-// ---- create window ----
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -166,7 +182,33 @@ const createWindow = () => {
         window.show();
     });
 
-    // your external-link handling stays as-is...
+    window.webContents.setWindowOpenHandler(({ url }) => {
+        console.log("[setWindowOpenHandler]", url);
+
+        if (!isProbablyNotionInternal(url)) {
+            shell.openExternal(url);
+            return { action: "deny" };
+        }
+        return { action: "allow" };
+    });
+
+    window.webContents.on("will-navigate", (event, url) => {
+        console.log("[will-navigate]", url);
+
+        if (!isProbablyNotionInternal(url)) {
+            event.preventDefault();
+            shell.openExternal(url);
+        }
+    });
+
+    window.webContents.on("will-redirect", (event, url) => {
+        console.log("[will-redirect]", url);
+
+        if (!isProbablyNotionInternal(url)) {
+            event.preventDefault();
+            shell.openExternal(url);
+        }
+    });
 };
 
 app.whenReady().then(createWindow);
