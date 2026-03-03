@@ -209,6 +209,14 @@ const createWindow = () => {
             shell.openExternal(url);
         }
     });
+
+    // Add F5 key handler to reload the page
+    window.webContents.on("before-input-event", (event, input) => {
+        if (input.type === "keyDown" && input.key === "F5") {
+            event.preventDefault();
+            window.webContents.reload();
+        }
+    });
 };
 
 app.whenReady().then(createWindow);
